@@ -2678,7 +2678,8 @@ OUTPUT is a string with the output from the checker symbol
 CHECKER.  BUFFER is the buffer which was checked.
 
 Return the errors parsed with the error patterns of CHECKER."
-  (let* ((parser (flycheck-checker-error-parser checker))
+  (let* ((parser (or (flycheck-checker-error-parser checker)
+                     #'flycheck-parse-with-patterns))
          (errors (funcall parser output checker buffer)))
     (--each errors
       ;; Remember the source buffer and checker in the error
@@ -2950,6 +2951,16 @@ Returns sanitized ERRORS."
           (setf (flycheck-error-column it) nil)))))
   errors)
 
+(defun flycheck-collapse-error-message-whitespace (errors)
+  "Collapse whitespace in all messages of ERRORS.
+
+Return ERRORS."
+  (--each errors
+    (-when-let (message (flycheck-error-message it))
+      (setf (flycheck-error-message it) (s-collapse-whitespace message))))
+  errors)
+
+
 ;;; Error analysis
 (defvar-local flycheck-current-errors nil
   "A list of all errors and warnings in the current buffer.")
@@ -4143,6 +4154,11 @@ This variable has no effect, if
             (message (zero-or-more not-newline)
                      (zero-or-more "\n    " (zero-or-more not-newline)))
             line-end))
+  :error-filter
+  (lambda (errors)
+    (-> errors
+      flycheck-sanitize-errors
+      flycheck-collapse-error-message-whitespace))
   :modes (emacs-lisp-mode lisp-interaction-mode)
   ;; Ensure that we only check buffers with a backing file.  For buffers without
   ;; a backing file we cannot guarantee that file names in error messages are
